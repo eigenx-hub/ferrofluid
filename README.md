@@ -43,11 +43,12 @@ Container selection via a dropdown or icon-grid in the UI.
 - Fluid volume affects how far spikes can travel and how they cluster
 
 ### Color Options
-- **Fluid color** — color picker for the ferrofluid body (classic black, deep blue, iridescent, custom)
+- **Magnetic gradient** — two-color gradient driven by distance from the magnetic source; fluid near the cursor shows color A, fluid far from it shows color B; as the cursor moves, the gradient field moves with it in real time
 - **Background color** — solid color or gradient behind the container
 - **Container tint** — glass tint/opacity so the vessel itself can be clear, amber, cobalt, etc.
-- **Spike highlight color** — subtle specular highlight on spike tips
-- **Preset themes**: Classic Black, Ocean, Lava, Neon, Phantom (dark purple/teal)
+- **Spike highlight color** — subtle specular highlight on spike tips; can be pinned to gradient color A for coherence
+- **Preset themes**: Classic Black, Ocean (deep blue → cyan), Lava (black → orange-red), Neon (violet → electric green), Phantom (dark purple → teal)
+- Gradient colors are fully customizable via two color pickers (near color + far color)
 
 ### Physical Parameters
 - **Field strength** — global multiplier on magnetic force magnitude
