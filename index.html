@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ferrofluid</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      background: #0a0a0f;
+      font-family: system-ui, sans-serif;
+      color: #ccc;
+    }
+
+    #canvas-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    canvas {
+      display: block;
+      cursor: crosshair;
+    }
+
+    #sidebar {
+      width: 280px;
+      background: #111118;
+      border-left: 1px solid #222;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    h1 { font-size: 1rem; font-weight: 600; letter-spacing: 0.05em; color: #eee; }
+
+    .section-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .control-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+
+    .control-row label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: #aaa;
+    }
+
+    .control-row label span { color: #eee; }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: #6af;
+    }
+
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      font-size: 0.8rem;
+      color: #aaa;
+    }
+
+    input[type="color"] {
+      width: 36px;
+      height: 24px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      padding: 0;
+      background: none;
+    }
+
+    .toggle-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .toggle-btn {
+      flex: 1;
+      padding: 6px;
+      border: 1px solid #333;
+      border-radius: 4px;
+      background: #1a1a22;
+      color: #aaa;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+
+    .toggle-btn.active {
+      background: #6af;
+      color: #000;
+      border-color: #6af;
+    }
+
+    select {
+      width: 100%;
+      padding: 6px;
+      background: #1a1a22;
+      border: 1px solid #333;
+      border-radius: 4px;
+      color: #ccc;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+    }
+
+    .preset-btn {
+      padding: 6px;
+      border: 1px solid #333;
+      border-radius: 4px;
+      background: #1a1a22;
+      color: #aaa;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+
+    .preset-btn:hover { border-color: #6af; color: #eee; }
+  </style>
+</head>
+<body>
+  <div id="canvas-wrap">
+    <canvas id="canvas"></canvas>
+  </div>
+  <div id="sidebar"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
