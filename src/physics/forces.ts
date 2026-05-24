@@ -1,12 +1,18 @@
 import { PhysicsState, PhysicsConfig } from './types';
 
 /**
- * Vertical component of the field from a magnetic monopole at depth D below
- * the fluid surface. F(r) = D / (r² + D²)^(3/2).
+ * Vertical component of a magnetic monopole at effective depth D_eff below
+ * the surface.  F(r) = D_eff / (r² + D_eff²)^(3/2).
  *
- * Unlike the 2D 1/r² model this is always finite (no singularity), has a
- * smooth dome shape, and spreads force over a radius ≈ D — which is what
- * drives the ring of Rosensweig spikes seen in real ferrofluid photos.
+ * Key physics: the magnet sits at a fixed position behind the glass.  As a
+ * fluid column grows taller it moves *closer* to the magnet, so D_eff
+ * decreases and the force grows — this is the positive-feedback loop that
+ * drives the Rosensweig normal-field instability.  Taller spikes feel
+ * stronger force and grow further; neighbouring valleys receive less force
+ * and are pulled back by gravity, creating the characteristic spike pattern.
+ *
+ * D_eff = max(D * 0.25, D − dh)   where dh = h − restHeight.
+ * The 0.25 floor prevents singularity and caps amplification at ~16 ×.
  */
 export function applyMagnetic(
   state: PhysicsState,
@@ -14,11 +20,11 @@ export function applyMagnetic(
   forces: Float32Array
 ): void {
   if (!state.cursor) return;
-  const { mask, cursor, mode, gridSize } = state;
+  const { mask, cursor, mode, gridSize, heights, restHeight } = state;
   const { fieldStrength, magnetDepth } = config;
   const sign = mode === 'attract' ? 1 : -1;
   const N = gridSize;
-  const D2 = magnetDepth * magnetDepth;
+  const minDepth = magnetDepth * 0.25;
 
   for (let j = 0; j < N; j++) {
     for (let i = 0; i < N; i++) {
@@ -27,9 +33,11 @@ export function applyMagnetic(
       const dx = i / (N - 1) - cursor.x;
       const dy = j / (N - 1) - cursor.y;
       const r2 = dx * dx + dy * dy;
-      // Vertical monopole field: depth / (r² + depth²)^(3/2)
-      const denom = Math.pow(r2 + D2, 1.5);
-      forces[idx]! += sign * fieldStrength * magnetDepth / denom;
+
+      // Effective depth: decreases as the surface rises toward the magnet.
+      const dh = heights[idx]! - restHeight;
+      const effDepth = Math.max(minDepth, magnetDepth - dh);
+      forces[idx]! += sign * fieldStrength * effDepth / Math.pow(r2 + effDepth * effDepth, 1.5);
     }
   }
 }

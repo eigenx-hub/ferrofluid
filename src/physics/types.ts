@@ -39,11 +39,11 @@ export interface PhysicsConfig {
 
 export const DEFAULT_CONFIG: PhysicsConfig = {
   gridSize: 96,
-  fieldStrength: 0.22,
+  fieldStrength: 0.15,  // reduced: amplification from effDepth model adds effective strength
   viscosity: 1.2,
   surfaceTension: 3.5,
-  gravity: 5,
+  gravity: 8,           // raised: limits equilibrium spike height so not all cells saturate at 1
   fillLevel: 0.3,
-  subSteps: 12,
+  subSteps: 16,         // raised: nonlinear force needs more sub-steps for stability
   magnetDepth: 0.28,
 };
