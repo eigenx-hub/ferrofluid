@@ -1,48 +1,33 @@
-import { ContainerDef, FluidRegion, evenSpacing } from './types';
+import { ContainerDef, FluidRegion, circleMask } from './types';
 
 export const beaker: ContainerDef = {
   id: 'beaker',
   label: 'Beaker',
 
-  getSampleXPositions: (count) => evenSpacing(count),
+  getMask: (N) => circleMask(N, 0.46),
 
   getFluidRegion(cW, cH): FluidRegion {
-    const w = Math.min(cW * 0.45, 260);
-    const h = cH * 0.6;
-    const x = (cW - w) / 2;
-    const y = cH * 0.2;
-    return { x, y, w, h };
+    const size = Math.min(cW * 0.62, cH * 0.68, 440);
+    return { x: (cW - size) / 2, y: (cH - size) / 2, w: size, h: size };
   },
 
   drawOutline(ctx, cW, cH) {
     const r = this.getFluidRegion(cW, cH);
-    const spoutW = 20;
-    const spoutH = 12;
-
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2, rad = r.w / 2;
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(r.x, r.y + r.h);
-    ctx.lineTo(r.x + r.w, r.y + r.h);
-    ctx.lineTo(r.x + r.w, r.y);
-    // Spout notch on right
-    ctx.lineTo(r.x + r.w + spoutW, r.y - spoutH);
-    ctx.lineTo(r.x + r.w, r.y - spoutH * 0.6);
-    ctx.lineTo(r.x, r.y);
-    ctx.lineTo(r.x, r.y + r.h);
-    ctx.closePath();
-
+    ctx.arc(cx, cy, rad + 4, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(160,210,255,0.55)';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.5;
     ctx.stroke();
-
-    // Graduation marks
-    for (let i = 1; i <= 4; i++) {
-      const gy = r.y + r.h * (i / 5);
+    // Graduation marks at 3, 6, 9 o'clock
+    for (let a = 0; a < 3; a++) {
+      const angle = (a / 3) * Math.PI * 2 - Math.PI / 2;
       ctx.beginPath();
-      ctx.moveTo(r.x + r.w - 14, gy);
-      ctx.lineTo(r.x + r.w, gy);
-      ctx.strokeStyle = 'rgba(160,210,255,0.25)';
-      ctx.lineWidth = 1;
+      ctx.moveTo(cx + Math.cos(angle) * (rad + 8), cy + Math.sin(angle) * (rad + 8));
+      ctx.lineTo(cx + Math.cos(angle) * (rad + 16), cy + Math.sin(angle) * (rad + 16));
+      ctx.strokeStyle = 'rgba(160,210,255,0.3)';
+      ctx.lineWidth = 1.5;
       ctx.stroke();
     }
     ctx.restore();

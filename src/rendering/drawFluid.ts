@@ -1,10 +1,35 @@
 import { PhysicsState } from '../physics/types';
 import { FluidRegion } from '../containers/types';
-import { ColorConfig, rgbToString } from './colors';
+import { ColorConfig } from './colors';
+
+// Light direction — upper-left, angled down. Normalized.
+const LX = 0.35, LY = -0.55, LZ = 0.76;
+const L_LEN = Math.sqrt(LX * LX + LY * LY + LZ * LZ);
+const lightX = LX / L_LEN, lightY = LY / L_LEN, lightZ = LZ / L_LEN;
+
+let offscreen: HTMLCanvasElement | null = null;
+let offCtx: CanvasRenderingContext2D | null = null;
+
+function getOffscreen(N: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+  if (!offscreen) {
+    offscreen = document.createElement('canvas');
+    offCtx = offscreen.getContext('2d')!;
+  }
+  if (offscreen.width !== N || offscreen.height !== N) {
+    offscreen.width = N;
+    offscreen.height = N;
+  }
+  return [offscreen, offCtx!];
+}
 
 /**
- * Draws the fluid body and spike surface into ctx.
- * Uses a radial gradient anchored to the cursor for distance-based coloring.
+ * Renders the 2D ferrofluid height field using normal-map shading.
+ *
+ * Steps:
+ *  1. For each grid cell, compute surface normal from finite differences.
+ *  2. Apply Phong lighting (ambient + diffuse + specular).
+ *  3. Base color comes from the height-based gradient.
+ *  4. Write to an N×N ImageData, then scale to the fluid region on the main canvas.
  */
 export function drawFluid(
   ctx: CanvasRenderingContext2D,
@@ -12,69 +37,73 @@ export function drawFluid(
   region: FluidRegion,
   colors: ColorConfig
 ): void {
-  const { heights, cursor } = state;
-  const n = heights.length;
-  if (n === 0) return;
+  const { heights, mask, gridSize, restHeight } = state;
+  const N = gridSize;
+  const [off, oCtx] = getOffscreen(N);
 
-  // Canvas coords for each surface sample point
-  const pts: { x: number; y: number }[] = Array.from({ length: n }, (_, i) => ({
-    x: region.x + (n === 1 ? 0.5 : i / (n - 1)) * region.w,
-    y: region.y + region.h * (1 - heights[i]!),
-  }));
+  const imgData = oCtx.createImageData(N, N);
+  const data = imgData.data;
 
-  // Build smooth surface path using quadratic bezier midpoints
+  const { nearColor, farColor } = colors;
+  // heightScale controls how "tall" the normals appear — higher = sharper spikes
+  const heightScale = 12;
+  const specPow = 28;
+  const ambient = 0.12;
+
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      const idx = j * N + i;
+      const pixBase = idx * 4;
+
+      if (!mask[idx]) {
+        data[pixBase + 3] = 0; // transparent outside container
+        continue;
+      }
+
+      const h = heights[idx]!;
+
+      // Height-based gradient: spike tip → nearColor, flat fluid → farColor
+      const t = Math.max(0, 1 - h / Math.max(restHeight * 1.6, 0.01));
+      const baseR = nearColor[0] + (farColor[0] - nearColor[0]) * t;
+      const baseG = nearColor[1] + (farColor[1] - nearColor[1]) * t;
+      const baseB = nearColor[2] + (farColor[2] - nearColor[2]) * t;
+
+      // Surface normal via central differences (Neumann BC: same h outside mask)
+      const il = Math.max(0, i - 1), ir = Math.min(N - 1, i + 1);
+      const jt = Math.max(0, j - 1), jb = Math.min(N - 1, j + 1);
+      const hl = mask[j * N + il] ? heights[j * N + il]! : h;
+      const hr = mask[j * N + ir] ? heights[j * N + ir]! : h;
+      const ht = mask[jt * N + i] ? heights[jt * N + i]! : h;
+      const hb = mask[jb * N + i] ? heights[jb * N + i]! : h;
+
+      const nx = -(hr - hl) * heightScale;
+      const ny = -(hb - ht) * heightScale;
+      const nz = 1.0;
+      const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz);
+      const nnx = nx / nLen, nny = ny / nLen, nnz = nz / nLen;
+
+      // Diffuse
+      const diffuse = Math.max(0, nnx * lightX + nny * lightY + nnz * lightZ);
+
+      // Phong specular — view direction is (0, 0, 1)
+      const dotNL = nnx * lightX + nny * lightY + nnz * lightZ;
+      const rz = 2 * dotNL * nnz - lightZ;
+      const specular = Math.pow(Math.max(0, rz), specPow);
+
+      const brightness = ambient + diffuse * 0.7;
+
+      data[pixBase + 0] = Math.min(255, baseR * brightness + specular * 255) | 0;
+      data[pixBase + 1] = Math.min(255, baseG * brightness + specular * 245) | 0;
+      data[pixBase + 2] = Math.min(255, baseB * brightness + specular * 255) | 0;
+      data[pixBase + 3] = 255;
+    }
+  }
+
+  oCtx.putImageData(imgData, 0, 0);
+
   ctx.save();
-
-  // Clip to fluid region so spikes never overflow the container
-  ctx.beginPath();
-  ctx.rect(region.x, region.y, region.w, region.h);
-  ctx.clip();
-
-  // Radial gradient centered on cursor (or region center when no cursor)
-  const cursorCanvasX = cursor
-    ? region.x + cursor.x * region.w
-    : region.x + region.w / 2;
-  const cursorCanvasY = cursor
-    ? region.y + region.h * (1 - cursor.y)
-    : region.y + region.h * 0.5;
-  const maxRadius = Math.sqrt(region.w ** 2 + region.h ** 2);
-  const grad = ctx.createRadialGradient(
-    cursorCanvasX, cursorCanvasY, 0,
-    cursorCanvasX, cursorCanvasY, maxRadius
-  );
-  grad.addColorStop(0, rgbToString(colors.nearColor, 1));
-  grad.addColorStop(1, rgbToString(colors.farColor, 1));
-
-  // Surface path
-  ctx.beginPath();
-  ctx.moveTo(pts[0]!.x, pts[0]!.y);
-  for (let i = 0; i < n - 1; i++) {
-    const mid = { x: (pts[i]!.x + pts[i + 1]!.x) / 2, y: (pts[i]!.y + pts[i + 1]!.y) / 2 };
-    ctx.quadraticCurveTo(pts[i]!.x, pts[i]!.y, mid.x, mid.y);
-  }
-  ctx.lineTo(pts[n - 1]!.x, pts[n - 1]!.y);
-
-  // Close path along the container bottom
-  ctx.lineTo(region.x + region.w, region.y + region.h);
-  ctx.lineTo(region.x, region.y + region.h);
-  ctx.closePath();
-
-  ctx.fillStyle = grad;
-  ctx.fill();
-
-  // Spike tip glow (shadowBlur on a second pass of just the surface line)
-  ctx.beginPath();
-  ctx.moveTo(pts[0]!.x, pts[0]!.y);
-  for (let i = 0; i < n - 1; i++) {
-    const mid = { x: (pts[i]!.x + pts[i + 1]!.x) / 2, y: (pts[i]!.y + pts[i + 1]!.y) / 2 };
-    ctx.quadraticCurveTo(pts[i]!.x, pts[i]!.y, mid.x, mid.y);
-  }
-  ctx.lineTo(pts[n - 1]!.x, pts[n - 1]!.y);
-  ctx.shadowColor = rgbToString(colors.nearColor, 0.7);
-  ctx.shadowBlur = 12;
-  ctx.strokeStyle = rgbToString(colors.nearColor, 0.6);
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(off, region.x, region.y, region.w, region.h);
   ctx.restore();
 }

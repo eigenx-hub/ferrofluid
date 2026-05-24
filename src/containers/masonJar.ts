@@ -1,58 +1,32 @@
-import { ContainerDef, FluidRegion, evenSpacing } from './types';
+import { ContainerDef, FluidRegion, circleMask } from './types';
 
 export const masonJar: ContainerDef = {
   id: 'masonJar',
   label: 'Mason Jar',
 
-  getSampleXPositions: (count) => evenSpacing(count),
+  getMask: (N) => circleMask(N, 0.45),
 
   getFluidRegion(cW, cH): FluidRegion {
-    const w = Math.min(cW * 0.42, 240);
-    const h = cH * 0.58;
-    const x = (cW - w) / 2;
-    const y = cH * 0.22;
-    return { x, y, w, h };
+    const size = Math.min(cW * 0.60, cH * 0.68, 420);
+    return { x: (cW - size) / 2, y: (cH - size) / 2, w: size, h: size };
   },
 
   drawOutline(ctx, cW, cH) {
     const r = this.getFluidRegion(cW, cH);
-    const lidH = 18;
-    const neckInset = 10;
-
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2, rad = r.w / 2;
     ctx.save();
-    // Body
+    // Main rim
     ctx.beginPath();
-    ctx.moveTo(r.x, r.y + r.h);
-    ctx.lineTo(r.x + r.w, r.y + r.h);
-    ctx.lineTo(r.x + r.w, r.y + lidH);
-    ctx.lineTo(r.x + r.w - neckInset, r.y + lidH);
-    ctx.lineTo(r.x + r.w - neckInset, r.y);
-    ctx.lineTo(r.x + neckInset, r.y);
-    ctx.lineTo(r.x + neckInset, r.y + lidH);
-    ctx.lineTo(r.x, r.y + lidH);
-    ctx.lineTo(r.x, r.y + r.h);
-    ctx.closePath();
+    ctx.arc(cx, cy, rad + 5, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(160,210,255,0.5)';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.stroke();
-
-    // Lid band
+    // Lid ring
     ctx.beginPath();
-    ctx.rect(r.x - 4, r.y - 4, r.w + 8, lidH + 4);
-    ctx.strokeStyle = 'rgba(160,210,255,0.35)';
-    ctx.lineWidth = 1.5;
+    ctx.arc(cx, cy, rad + 14, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(160,210,255,0.25)';
+    ctx.lineWidth = 5;
     ctx.stroke();
-
-    // Horizontal ridges
-    for (let i = 1; i <= 3; i++) {
-      const ry = r.y + lidH + r.h * (i / 4);
-      ctx.beginPath();
-      ctx.moveTo(r.x, ry);
-      ctx.lineTo(r.x + r.w, ry);
-      ctx.strokeStyle = 'rgba(160,210,255,0.1)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
     ctx.restore();
   },
 };

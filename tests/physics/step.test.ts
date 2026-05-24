@@ -2,108 +2,111 @@ import { describe, it, expect } from 'vitest';
 import { stepPhysics, createInitialState } from '../../src/physics/step';
 import { PhysicsConfig, DEFAULT_CONFIG } from '../../src/physics/types';
 
+const N = 8;
+const fullMask = new Uint8Array(N * N).fill(1);
+
 function cfg(overrides: Partial<PhysicsConfig> = {}): PhysicsConfig {
-  return { ...DEFAULT_CONFIG, spikeCount: 8, ...overrides };
+  return { ...DEFAULT_CONFIG, gridSize: N, subSteps: 1, ...overrides };
 }
 
 describe('createInitialState', () => {
-  it('initializes all heights to fillLevel', () => {
-    const state = createInitialState(16, 0.4);
-    // Float32Array stores 32-bit floats; compare with tolerance
-    expect(Array.from(state.heights).every((h) => Math.abs(h - 0.4) < 1e-6)).toBe(true);
+  it('initializes heights inside mask to fillLevel', () => {
+    const state = createInitialState(N, 0.4, fullMask);
+    for (let i = 0; i < N * N; i++) {
+      expect(Math.abs(state.heights[i]! - 0.4)).toBeLessThan(1e-6);
+    }
+  });
+
+  it('initializes heights outside mask to 0', () => {
+    const halfMask = new Uint8Array(N * N); // all outside
+    const state = createInitialState(N, 0.5, halfMask);
+    expect(Array.from(state.heights).every((h) => h === 0)).toBe(true);
   });
 
   it('initializes all velocities to 0', () => {
-    const state = createInitialState(16, 0.4);
+    const state = createInitialState(N, 0.4, fullMask);
     expect(Array.from(state.velocities).every((v) => v === 0)).toBe(true);
   });
 
   it('sets restHeight to fillLevel', () => {
-    const state = createInitialState(8, 0.7);
-    expect(state.restHeight).toBe(0.7);
+    expect(createInitialState(N, 0.7, fullMask).restHeight).toBe(0.7);
   });
 
   it('defaults cursor to null', () => {
-    expect(createInitialState(8, 0.5).cursor).toBeNull();
-  });
-
-  it('respects mode parameter', () => {
-    expect(createInitialState(8, 0.5, 'repel').mode).toBe('repel');
+    expect(createInitialState(N, 0.5, fullMask).cursor).toBeNull();
   });
 });
 
 describe('stepPhysics', () => {
   it('returns a new state object (immutability)', () => {
-    const state = createInitialState(8, 0.5);
+    const state = createInitialState(N, 0.5, fullMask);
     const next = stepPhysics(state, cfg(), 0.016);
     expect(next).not.toBe(state);
     expect(next.heights).not.toBe(state.heights);
     expect(next.velocities).not.toBe(state.velocities);
   });
 
-  it('returns the same state when dt = 0', () => {
-    const state = createInitialState(8, 0.5);
+  it('returns the same state reference when dt = 0', () => {
+    const state = createInitialState(N, 0.5, fullMask);
     const next = stepPhysics(state, cfg(), 0);
     expect(next).toBe(state);
   });
 
-  it('with no cursor, heights converge back to restHeight over many ticks', () => {
-    let state = createInitialState(8, 0.5);
-    // Perturb one spike
-    const h = new Float32Array(state.heights);
-    h[3] = 0.9;
-    state = { ...state, heights: h };
+  it('with no cursor, a perturbed spike converges toward restHeight', () => {
+    let state = createInitialState(N, 0.5, fullMask);
+    const heights = new Float32Array(state.heights);
+    heights[4 * N + 4] = 0.9; // single spike at center
+    state = { ...state, heights };
 
-    // fillLevel must match initial state's restHeight; surfaceTension kept low for stability
-    const config = cfg({ gravity: 15, viscosity: 5, surfaceTension: 5, fieldStrength: 0, fillLevel: 0.5 });
-    for (let i = 0; i < 300; i++) {
-      state = stepPhysics(state, config, 0.016);
-    }
-    // After 300 ticks (~5s), spike should have largely settled
-    expect(Math.abs(state.heights[3]! - 0.5)).toBeLessThan(0.05);
+    const config = cfg({ gravity: 15, viscosity: 5, surfaceTension: 0.5, fieldStrength: 0, fillLevel: 0.5 });
+    for (let i = 0; i < 400; i++) state = stepPhysics(state, config, 0.016);
+    expect(Math.abs(state.heights[4 * N + 4]! - 0.5)).toBeLessThan(0.05);
   });
 
-  it('attract mode: spike nearest cursor grows after several ticks', () => {
-    let state = createInitialState(8, 0.4);
-    state = { ...state, cursor: { x: 0.5, y: 0.9 }, mode: 'attract' };
-    const config = cfg({ fieldStrength: 0.15, viscosity: 0.5, surfaceTension: 10, gravity: 2 });
-
-    const initHeight = state.heights[4]!;
-    for (let i = 0; i < 20; i++) {
-      state = stepPhysics(state, config, 0.016);
-    }
-    expect(state.heights[4]!).toBeGreaterThan(initHeight);
+  it('attract: spike grows near cursor after several ticks', () => {
+    const cursor = { x: 0.5, y: 0.5 };
+    let state = { ...createInitialState(N, 0.3, fullMask), cursor, mode: 'attract' as const };
+    const config = cfg({ fieldStrength: 0.2, viscosity: 0.3, surfaceTension: 0.2, gravity: 1, fillLevel: 0.3 });
+    const initH = state.heights[4 * N + 4]!;
+    for (let i = 0; i < 30; i++) state = stepPhysics(state, config, 0.016);
+    expect(state.heights[4 * N + 4]!).toBeGreaterThan(initH);
   });
 
-  it('repel mode: spike nearest cursor shrinks after several ticks', () => {
-    let state = createInitialState(8, 0.6);
-    state = { ...state, cursor: { x: 0.5, y: 0.9 }, mode: 'repel' };
-    const config = cfg({ fieldStrength: 0.15, viscosity: 0.5, surfaceTension: 10, gravity: 2 });
-
-    const initHeight = state.heights[4]!;
-    for (let i = 0; i < 20; i++) {
-      state = stepPhysics(state, config, 0.016);
-    }
-    expect(state.heights[4]!).toBeLessThan(initHeight);
+  it('repel: height drops near cursor after several ticks', () => {
+    const cursor = { x: 0.5, y: 0.5 };
+    let state = { ...createInitialState(N, 0.6, fullMask), cursor, mode: 'repel' as const };
+    const config = cfg({ fieldStrength: 0.2, viscosity: 0.3, surfaceTension: 0.2, gravity: 1, fillLevel: 0.6 });
+    const initH = state.heights[4 * N + 4]!;
+    for (let i = 0; i < 30; i++) state = stepPhysics(state, config, 0.016);
+    expect(state.heights[4 * N + 4]!).toBeLessThan(initH);
   });
 
-  it('heights stay within [0, 1] bounds regardless of extreme inputs', () => {
-    let state = createInitialState(8, 0.5);
-    state = { ...state, cursor: { x: 0.5, y: 0.999 }, mode: 'attract' };
-    const config = cfg({ fieldStrength: 10, viscosity: 0, surfaceTension: 0, gravity: 0 });
-
-    for (let i = 0; i < 100; i++) {
-      state = stepPhysics(state, config, 0.016);
-    }
-    for (let i = 0; i < state.heights.length; i++) {
-      expect(state.heights[i]!).toBeGreaterThanOrEqual(0);
-      expect(state.heights[i]!).toBeLessThanOrEqual(1);
+  it('heights always stay within [0, 1]', () => {
+    let state = { ...createInitialState(N, 0.5, fullMask), cursor: { x: 0.5, y: 0.5 }, mode: 'attract' as const };
+    const config = cfg({ fieldStrength: 50, viscosity: 0, surfaceTension: 0, gravity: 0 });
+    for (let i = 0; i < 100; i++) state = stepPhysics(state, config, 0.016);
+    for (const h of state.heights) {
+      expect(h).toBeGreaterThanOrEqual(0);
+      expect(h).toBeLessThanOrEqual(1);
     }
   });
 
   it('fillLevel change updates restHeight in returned state', () => {
-    const state = createInitialState(8, 0.4);
+    const state = createInitialState(N, 0.4, fullMask);
     const next = stepPhysics(state, cfg({ fillLevel: 0.7 }), 0.016);
     expect(next.restHeight).toBe(0.7);
+  });
+
+  it('sub-stepping: multiple subSteps produces same direction of change as 1 subStep', () => {
+    const cursor = { x: 0.5, y: 0.5 };
+    const base = { ...createInitialState(N, 0.4, fullMask), cursor, mode: 'attract' as const };
+    const config1 = cfg({ fieldStrength: 0.1, subSteps: 1, fillLevel: 0.4 });
+    const config4 = cfg({ fieldStrength: 0.1, subSteps: 4, fillLevel: 0.4 });
+    const s1 = stepPhysics(base, config1, 0.016);
+    const s4 = stepPhysics(base, config4, 0.016);
+    const centerIdx = 4 * N + 4;
+    // Both should increase height near cursor
+    expect(s1.heights[centerIdx]!).toBeGreaterThan(base.heights[centerIdx]!);
+    expect(s4.heights[centerIdx]!).toBeGreaterThan(base.heights[centerIdx]!);
   });
 });

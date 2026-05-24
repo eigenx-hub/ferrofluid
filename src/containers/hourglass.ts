@@ -1,50 +1,47 @@
-import { ContainerDef, FluidRegion, evenSpacing } from './types';
+import { ContainerDef, FluidRegion } from './types';
+
+/** Two circles touching at center — figure-8 shape from above. */
+function hourglassMask(N: number): Uint8Array {
+  const mask = new Uint8Array(N * N);
+  const r = 0.26;
+  const topCY = 0.27, botCY = 0.73;
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      const x = i / (N - 1) - 0.5;
+      const y = j / (N - 1);
+      const inTop = x * x + (y - topCY) * (y - topCY) <= r * r;
+      const inBot = x * x + (y - botCY) * (y - botCY) <= r * r;
+      if (inTop || inBot) mask[j * N + i] = 1;
+    }
+  }
+  return mask;
+}
 
 export const hourglass: ContainerDef = {
   id: 'hourglass',
   label: 'Hourglass',
 
-  getSampleXPositions: (count) => evenSpacing(count),
+  getMask: hourglassMask,
 
-  // Fluid region covers the bottom chamber only
   getFluidRegion(cW, cH): FluidRegion {
-    const w = Math.min(cW * 0.44, 250);
-    const h = cH * 0.34;
-    const x = (cW - w) / 2;
-    const y = cH * 0.52;
-    return { x, y, w, h };
+    const size = Math.min(cW * 0.55, cH * 0.82, 460);
+    return { x: (cW - size) / 2, y: (cH - size) / 2, w: size, h: size };
   },
 
   drawOutline(ctx, cW, cH) {
     const r = this.getFluidRegion(cW, cH);
     const cx = r.x + r.w / 2;
-    const midY = r.y;              // center pinch point
-    const topY = r.y - r.h;       // top of upper chamber
-    const pinchW = 8;
-
+    const rad = r.w * 0.26;
+    const topCY = r.y + r.h * 0.27;
+    const botCY = r.y + r.h * 0.73;
     ctx.save();
-    ctx.beginPath();
-    // Bottom chamber (where fluid is)
-    ctx.moveTo(r.x, r.y + r.h);
-    ctx.lineTo(r.x + r.w, r.y + r.h);
-    ctx.lineTo(cx + pinchW, midY);
-    // Upper chamber (empty)
-    ctx.lineTo(r.x + r.w, topY);
-    ctx.lineTo(r.x, topY);
-    ctx.lineTo(cx - pinchW, midY);
-    ctx.lineTo(r.x, r.y + r.h);
-    ctx.closePath();
-
     ctx.strokeStyle = 'rgba(160,210,255,0.55)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Pinch sheen
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.moveTo(cx - pinchW - 2, midY - 4);
-    ctx.lineTo(cx + pinchW + 2, midY - 4);
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-    ctx.lineWidth = 2;
+    ctx.arc(cx, topCY, rad + 4, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, botCY, rad + 4, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   },

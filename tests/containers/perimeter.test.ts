@@ -1,40 +1,50 @@
 import { describe, it, expect } from 'vitest';
 import { CONTAINERS } from '../../src/containers';
 
-describe('container getSampleXPositions', () => {
+describe('container getMask', () => {
   for (const container of CONTAINERS) {
     describe(container.label, () => {
-      it('returns exactly count positions', () => {
-        expect(container.getSampleXPositions(64)).toHaveLength(64);
-        expect(container.getSampleXPositions(1)).toHaveLength(1);
-        expect(container.getSampleXPositions(2)).toHaveLength(2);
-        expect(container.getSampleXPositions(128)).toHaveLength(128);
+      it('returns exactly N*N values for N=32', () => {
+        const N = 32;
+        expect(container.getMask(N)).toHaveLength(N * N);
       });
 
-      it('all positions are finite numbers in [0, 1]', () => {
-        const pts = container.getSampleXPositions(32);
-        for (const x of pts) {
-          expect(isFinite(x)).toBe(true);
-          expect(x).toBeGreaterThanOrEqual(0);
-          expect(x).toBeLessThanOrEqual(1);
+      it('returns exactly N*N values for N=64', () => {
+        const N = 64;
+        expect(container.getMask(N)).toHaveLength(N * N);
+      });
+
+      it('all values are 0 or 1', () => {
+        const mask = container.getMask(32);
+        for (const v of mask) {
+          expect(v === 0 || v === 1).toBe(true);
         }
       });
 
-      it('count = 1: returns [0.5] (center)', () => {
-        expect(container.getSampleXPositions(1)).toEqual([0.5]);
+      it('at least some cells are inside (mask has 1s)', () => {
+        const mask = container.getMask(32);
+        expect(Array.from(mask).some((v) => v === 1)).toBe(true);
       });
 
-      it('count = 2: returns [0, 1] (endpoints)', () => {
-        const pts = container.getSampleXPositions(2);
-        expect(pts[0]).toBeCloseTo(0);
-        expect(pts[1]).toBeCloseTo(1);
+      it('not all cells are inside (mask has 0s for most shapes)', () => {
+        // Open pool fills most cells, but others should have a boundary
+        if (container.id === 'openPool') return;
+        const mask = container.getMask(32);
+        expect(Array.from(mask).some((v) => v === 0)).toBe(true);
       });
 
-      it('positions are monotonically non-decreasing', () => {
-        const pts = container.getSampleXPositions(32);
-        for (let i = 1; i < pts.length; i++) {
-          expect(pts[i]!).toBeGreaterThanOrEqual(pts[i - 1]!);
-        }
+      it('N=1: returns a 1-element array', () => {
+        expect(container.getMask(1)).toHaveLength(1);
+      });
+
+      it('N=2: returns a 4-element array', () => {
+        expect(container.getMask(2)).toHaveLength(4);
+      });
+
+      it('larger N has more inside cells than smaller N (scales consistently)', () => {
+        const m16 = Array.from(container.getMask(16)).filter(Boolean).length;
+        const m32 = Array.from(container.getMask(32)).filter(Boolean).length;
+        expect(m32).toBeGreaterThan(m16);
       });
     });
   }

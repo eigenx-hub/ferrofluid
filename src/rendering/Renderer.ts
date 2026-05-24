@@ -22,22 +22,17 @@ export class Renderer {
     const { ctx } = this;
     const { width: cW, height: cH } = ctx.canvas;
 
-    // Background
     ctx.fillStyle = rgbToString(colors.bgColor);
     ctx.fillRect(0, 0, cW, cH);
 
     const region = container.getFluidRegion(cW, cH);
-
-    // Fluid
     drawFluid(ctx, state, region, colors);
-
-    // Container outline (drawn on top of fluid)
     container.drawOutline(ctx, cW, cH);
   }
 
   /**
-   * Converts a canvas mouse event position to normalized physics coords.
-   * Returns null if the mouse is far outside the fluid region (> 2x region dims).
+   * Converts canvas mouse position to normalized physics coords [0,1]×[0,1].
+   * (0,0) = top-left of fluid region, (1,1) = bottom-right.
    */
   toPhysicsCoords(
     mouseX: number,
@@ -48,8 +43,7 @@ export class Renderer {
     const r = container.getFluidRegion(cW, cH);
     return {
       x: (mouseX - r.x) / r.w,
-      // physics y: 0 = bottom, 1 = top; canvas y increases downward
-      y: 1 - (mouseY - r.y) / r.h,
+      y: (mouseY - r.y) / r.h,
     };
   }
 

@@ -74,12 +74,11 @@ export function buildControls(sidebar: HTMLElement, initial: AppState, onChange:
   let state: AppState = { ...initial };
   const emit = () => onChange({ ...state });
 
-  // Header
   const h1 = document.createElement('h1');
   h1.textContent = 'Ferrofluid';
   sidebar.appendChild(h1);
 
-  // --- Mode ---
+  // Mode
   const modeSection = section('Magnet Mode');
   const toggleRow = document.createElement('div');
   toggleRow.className = 'toggle-row';
@@ -90,24 +89,19 @@ export function buildControls(sidebar: HTMLElement, initial: AppState, onChange:
   repelBtn.className = 'toggle-btn';
   repelBtn.textContent = 'Repel';
   attractBtn.addEventListener('click', () => {
-    state = { ...state, mode: 'attract', physicsConfig: { ...state.physicsConfig } };
-    state = { ...state, physicsConfig: { ...state.physicsConfig } };
-    attractBtn.classList.add('active');
-    repelBtn.classList.remove('active');
-    emit();
+    state = { ...state, mode: 'attract' };
+    attractBtn.classList.add('active'); repelBtn.classList.remove('active'); emit();
   });
   repelBtn.addEventListener('click', () => {
     state = { ...state, mode: 'repel' };
-    repelBtn.classList.add('active');
-    attractBtn.classList.remove('active');
-    emit();
+    repelBtn.classList.add('active'); attractBtn.classList.remove('active'); emit();
   });
   toggleRow.appendChild(attractBtn);
   toggleRow.appendChild(repelBtn);
   modeSection.appendChild(toggleRow);
   sidebar.appendChild(modeSection);
 
-  // --- Container ---
+  // Container
   const containerSection = section('Container');
   const sel = document.createElement('select');
   CONTAINERS.forEach((c) => {
@@ -124,34 +118,34 @@ export function buildControls(sidebar: HTMLElement, initial: AppState, onChange:
   containerSection.appendChild(sel);
   sidebar.appendChild(containerSection);
 
-  // --- Physics ---
+  // Physics
   const physSection = section('Physics');
-  physSection.appendChild(slider('Field Strength', 0.01, 0.3, state.physicsConfig.fieldStrength, 0.005, (v) => {
+  physSection.appendChild(slider('Field Strength', 0.01, 0.4, state.physicsConfig.fieldStrength, 0.005, (v) => {
     state = { ...state, physicsConfig: { ...state.physicsConfig, fieldStrength: v } }; emit();
   }));
-  physSection.appendChild(slider('Viscosity', 0.1, 8, state.physicsConfig.viscosity, 0.1, (v) => {
+  physSection.appendChild(slider('Viscosity', 0.2, 10, state.physicsConfig.viscosity, 0.1, (v) => {
     state = { ...state, physicsConfig: { ...state.physicsConfig, viscosity: v } }; emit();
   }));
-  physSection.appendChild(slider('Surface Tension', 5, 200, state.physicsConfig.surfaceTension, 5, (v) => {
+  physSection.appendChild(slider('Surface Tension', 2, 120, state.physicsConfig.surfaceTension, 2, (v) => {
     state = { ...state, physicsConfig: { ...state.physicsConfig, surfaceTension: v } }; emit();
   }));
-  physSection.appendChild(slider('Gravity', 1, 40, state.physicsConfig.gravity, 0.5, (v) => {
+  physSection.appendChild(slider('Gravity', 1, 30, state.physicsConfig.gravity, 0.5, (v) => {
     state = { ...state, physicsConfig: { ...state.physicsConfig, gravity: v } }; emit();
   }));
-  physSection.appendChild(slider('Fill Level', 0.1, 0.9, state.physicsConfig.fillLevel, 0.01, (v) => {
+  physSection.appendChild(slider('Fill Level', 0.05, 0.8, state.physicsConfig.fillLevel, 0.01, (v) => {
     state = { ...state, physicsConfig: { ...state.physicsConfig, fillLevel: v } }; emit();
   }));
-  physSection.appendChild(slider('Spike Count', 32, 256, state.physicsConfig.spikeCount, 16, (v) => {
-    state = { ...state, physicsConfig: { ...state.physicsConfig, spikeCount: Math.round(v) } }; emit();
+  physSection.appendChild(slider('Grid Resolution', 32, 128, state.physicsConfig.gridSize, 16, (v) => {
+    state = { ...state, physicsConfig: { ...state.physicsConfig, gridSize: Math.round(v) } }; emit();
   }));
   sidebar.appendChild(physSection);
 
-  // --- Colors ---
+  // Colors
   const colorSection = section('Colors');
-  colorSection.appendChild(colorRow('Near color (cursor)', state.colorConfig.nearColor, (c) => {
+  colorSection.appendChild(colorRow('Spike color (near)', state.colorConfig.nearColor, (c) => {
     state = { ...state, colorConfig: { ...state.colorConfig, nearColor: c } }; emit();
   }));
-  colorSection.appendChild(colorRow('Far color', state.colorConfig.farColor, (c) => {
+  colorSection.appendChild(colorRow('Base color (far)', state.colorConfig.farColor, (c) => {
     state = { ...state, colorConfig: { ...state.colorConfig, farColor: c } }; emit();
   }));
   colorSection.appendChild(colorRow('Background', state.colorConfig.bgColor, (c) => {
@@ -159,7 +153,7 @@ export function buildControls(sidebar: HTMLElement, initial: AppState, onChange:
   }));
   sidebar.appendChild(colorSection);
 
-  // --- Presets ---
+  // Presets
   const presetSection = section('Presets');
   const grid = document.createElement('div');
   grid.className = 'preset-grid';
@@ -168,11 +162,7 @@ export function buildControls(sidebar: HTMLElement, initial: AppState, onChange:
     btn.className = 'preset-btn';
     btn.textContent = p.label;
     btn.addEventListener('click', () => {
-      state = {
-        ...state,
-        physicsConfig: { ...state.physicsConfig, ...p.physics },
-        colorConfig: p.colors,
-      };
+      state = { ...state, physicsConfig: { ...state.physicsConfig, ...p.physics }, colorConfig: p.colors };
       emit();
     });
     grid.appendChild(btn);

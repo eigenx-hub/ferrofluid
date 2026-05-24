@@ -3,91 +3,83 @@ import { stepPhysics, createInitialState } from '../../src/physics/step';
 import { applySurfaceTension } from '../../src/physics/forces';
 import { PhysicsConfig, DEFAULT_CONFIG } from '../../src/physics/types';
 
-function cfg(overrides: Partial<PhysicsConfig> = {}): PhysicsConfig {
-  return { ...DEFAULT_CONFIG, ...overrides };
+const fullMask = (N: number) => new Uint8Array(N * N).fill(1);
+
+function cfg(N: number, overrides: Partial<PhysicsConfig> = {}): PhysicsConfig {
+  return { ...DEFAULT_CONFIG, gridSize: N, subSteps: 1, ...overrides };
 }
 
-describe('edge cases', () => {
-  it('spikeCount = 1: step does not crash', () => {
-    const state = createInitialState(1, 0.5);
-    expect(() => stepPhysics({ ...state, cursor: { x: 0.5, y: 0.8 } }, cfg({ spikeCount: 1 }), 0.016)).not.toThrow();
+describe('2D physics edge cases', () => {
+  it('gridSize = 1: step does not crash', () => {
+    const mask = new Uint8Array([1]);
+    const state = createInitialState(1, 0.5, mask);
+    expect(() => stepPhysics({ ...state, cursor: { x: 0.5, y: 0.5 } }, cfg(1), 0.016)).not.toThrow();
   });
 
-  it('spikeCount = 2: surface tension wrap-around does not crash', () => {
-    const heights = new Float32Array([0.3, 0.7]);
-    const forces = new Float32Array(2);
-    expect(() => applySurfaceTension(heights, 50, forces)).not.toThrow();
-    expect(isFinite(forces[0]!)).toBe(true);
-    expect(isFinite(forces[1]!)).toBe(true);
+  it('gridSize = 2: surface tension 4-neighbor wrap does not crash', () => {
+    const mask = fullMask(2);
+    const heights = new Float32Array([0.3, 0.7, 0.5, 0.9]);
+    const forces = new Float32Array(4);
+    expect(() => applySurfaceTension(heights, mask, 2, 10, forces)).not.toThrow();
+    expect(Array.from(forces).every(isFinite)).toBe(true);
   });
 
-  it('cursor outside container bounds (x < 0): no crash, force is finite', () => {
-    const state = createInitialState(8, 0.5);
-    const perturbed = { ...state, cursor: { x: -0.5, y: 0.8 }, mode: 'attract' as const };
-    expect(() => stepPhysics(perturbed, cfg({ spikeCount: 8 }), 0.016)).not.toThrow();
-    const next = stepPhysics(perturbed, cfg({ spikeCount: 8 }), 0.016);
-    for (let i = 0; i < next.heights.length; i++) {
-      expect(isFinite(next.heights[i]!)).toBe(true);
-    }
+  it('cursor outside container bounds (x < 0): no crash, heights are finite', () => {
+    const N = 8;
+    const state = { ...createInitialState(N, 0.5, fullMask(N)), cursor: { x: -1, y: 0.5 } };
+    const next = stepPhysics(state, cfg(N), 0.016);
+    expect(Array.from(next.heights).every(isFinite)).toBe(true);
   });
 
-  it('cursor outside container bounds (x > 1): no crash, force is finite', () => {
-    const state = createInitialState(8, 0.5);
-    const perturbed = { ...state, cursor: { x: 1.5, y: 0.5 } };
-    const next = stepPhysics(perturbed, cfg({ spikeCount: 8 }), 0.016);
-    for (let i = 0; i < next.heights.length; i++) {
-      expect(isFinite(next.heights[i]!)).toBe(true);
-    }
+  it('cursor outside container bounds (x > 1): no crash, heights are finite', () => {
+    const N = 8;
+    const state = { ...createInitialState(N, 0.5, fullMask(N)), cursor: { x: 2, y: 0.5 } };
+    const next = stepPhysics(state, cfg(N), 0.016);
+    expect(Array.from(next.heights).every(isFinite)).toBe(true);
   });
 
-  it('fillLevel = 0: restHeight = 0, fluid hugs bottom', () => {
-    let state = createInitialState(8, 0);
-    const config = cfg({ spikeCount: 8, fillLevel: 0, fieldStrength: 0, gravity: 20, viscosity: 5 });
+  it('fillLevel = 0: heights stay at/near 0', () => {
+    const N = 8;
+    let state = createInitialState(N, 0, fullMask(N));
+    const config = cfg(N, { fillLevel: 0, fieldStrength: 0, gravity: 20, viscosity: 5 });
     for (let i = 0; i < 100; i++) state = stepPhysics(state, config, 0.016);
-    for (let i = 0; i < state.heights.length; i++) {
-      expect(state.heights[i]!).toBeCloseTo(0, 1);
-    }
+    for (const h of state.heights) expect(h).toBeCloseTo(0, 1);
   });
 
-  it('fillLevel = 1.0: restHeight = 1, fluid fills container', () => {
-    let state = createInitialState(8, 1);
-    const config = cfg({ spikeCount: 8, fillLevel: 1, fieldStrength: 0, gravity: 20, viscosity: 5 });
+  it('fillLevel = 1.0: heights stay at/near 1', () => {
+    const N = 8;
+    let state = createInitialState(N, 1, fullMask(N));
+    const config = cfg(N, { fillLevel: 1, fieldStrength: 0, gravity: 20, viscosity: 5 });
     for (let i = 0; i < 100; i++) state = stepPhysics(state, config, 0.016);
-    for (let i = 0; i < state.heights.length; i++) {
-      expect(state.heights[i]!).toBeCloseTo(1, 1);
-    }
+    for (const h of state.heights) expect(h).toBeCloseTo(1, 1);
   });
 
-  it('extreme fieldStrength: heights are always clamped to [0,1]', () => {
-    let state = createInitialState(16, 0.5);
-    state = { ...state, cursor: { x: 0.5, y: 0.99 }, mode: 'attract' };
-    const config = cfg({ spikeCount: 16, fieldStrength: 100, viscosity: 0, surfaceTension: 0, gravity: 0 });
+  it('extreme fieldStrength: heights clamped to [0,1]', () => {
+    const N = 16;
+    let state = { ...createInitialState(N, 0.5, fullMask(N)), cursor: { x: 0.5, y: 0.5 }, mode: 'attract' as const };
+    const config = cfg(N, { fieldStrength: 500, viscosity: 0, surfaceTension: 0, gravity: 0 });
     for (let i = 0; i < 60; i++) state = stepPhysics(state, config, 0.016);
-    for (let i = 0; i < state.heights.length; i++) {
-      expect(state.heights[i]!).toBeGreaterThanOrEqual(0);
-      expect(state.heights[i]!).toBeLessThanOrEqual(1);
+    for (const h of state.heights) {
+      expect(h).toBeGreaterThanOrEqual(0);
+      expect(h).toBeLessThanOrEqual(1);
     }
   });
 
-  it('viscosity = 1.0 with large dt: velocities clamped to >= 0 factor', () => {
-    let state = createInitialState(8, 0.5);
-    state = { ...state, cursor: { x: 0.5, y: 0.8 }, mode: 'attract' };
-    const config = cfg({ spikeCount: 8, viscosity: 1.0, fieldStrength: 0.1 });
-    // Should not throw or produce NaN
-    expect(() => {
-      state = stepPhysics(state, config, 2.0); // very large dt
-    }).not.toThrow();
-    for (let i = 0; i < state.velocities.length; i++) {
-      expect(isFinite(state.velocities[i]!)).toBe(true);
-    }
+  it('all-zero mask: step is a no-op for heights', () => {
+    const N = 8;
+    const mask = new Uint8Array(N * N); // all outside
+    let state = createInitialState(N, 0.5, mask);
+    state = { ...state, cursor: { x: 0.5, y: 0.5 } };
+    const next = stepPhysics(state, cfg(N, { fieldStrength: 1 }), 0.016);
+    expect(Array.from(next.heights).every((h) => h === 0)).toBe(true);
   });
 
-  it('large spikeCount (256): no performance crash within reasonable time', () => {
-    let state = createInitialState(256, 0.5);
-    state = { ...state, cursor: { x: 0.5, y: 0.8 } };
-    const config = cfg({ spikeCount: 256 });
+  it('large grid (128×128): 60 ticks complete in reasonable time', () => {
+    const N = 128;
+    let state = { ...createInitialState(N, 0.5, fullMask(N)), cursor: { x: 0.5, y: 0.5 } };
+    const config = cfg(N, { subSteps: 1 });
     const start = Date.now();
     for (let i = 0; i < 60; i++) state = stepPhysics(state, config, 0.016);
-    expect(Date.now() - start).toBeLessThan(500); // 60 ticks in under 500ms
+    expect(Date.now() - start).toBeLessThan(2000);
   });
 });

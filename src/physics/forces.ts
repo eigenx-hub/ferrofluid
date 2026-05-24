@@ -1,11 +1,11 @@
 import { PhysicsState, PhysicsConfig } from './types';
 
-const MIN_DIST = 0.005;
+const MIN_DIST = 0.008;
 
 /**
- * Applies magnetic force from cursor into `forces` array (in-place accumulation).
- * Each sample point is at (xi, heights[i]) in normalized space.
- * Force acts vertically: attract pulls height toward cursor, repel pushes away.
+ * Applies magnetic force from cursor into `forces` (in-place accumulation).
+ * Force is purely vertical (upward for attract, downward for repel).
+ * Magnitude falls off as 1/dist^2 from cursor position in XY plane.
  */
 export function applyMagnetic(
   state: PhysicsState,
@@ -13,64 +13,79 @@ export function applyMagnetic(
   forces: Float32Array
 ): void {
   if (!state.cursor) return;
-  const { heights, cursor, mode } = state;
-  const { fieldStrength, spikeCount } = config;
+  const { mask, cursor, mode, gridSize } = state;
+  const { fieldStrength } = config;
   const sign = mode === 'attract' ? 1 : -1;
+  const N = gridSize;
 
-  for (let i = 0; i < spikeCount; i++) {
-    const xi = spikeCount === 1 ? 0.5 : i / (spikeCount - 1);
-    const dx = xi - cursor.x;
-    const dy = heights[i]! - cursor.y;
-    const dist = Math.max(Math.sqrt(dx * dx + dy * dy), MIN_DIST);
-    const forceMag = fieldStrength / (dist * dist);
-    // Vertical component of force toward/away from cursor
-    const dirY = (cursor.y - heights[i]!) / dist;
-    forces[i]! += sign * forceMag * dirY;
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      const idx = j * N + i;
+      if (!mask[idx]) continue;
+      const xi = i / (N - 1);
+      const yj = j / (N - 1);
+      const dx = xi - cursor.x;
+      const dy = yj - cursor.y;
+      const dist = Math.max(Math.sqrt(dx * dx + dy * dy), MIN_DIST);
+      forces[idx]! += sign * fieldStrength / (dist * dist);
+    }
   }
 }
 
 /**
- * Laplacian smoothing — pulls adjacent samples toward a common height.
- * Wraps at boundaries (treats array as circular).
+ * 2D Laplacian (4-neighbor stencil) with Neumann boundary conditions at mask edges.
+ * Neighbors outside the mask are treated as having the same height as the current cell.
  */
 export function applySurfaceTension(
   heights: Float32Array,
+  mask: Uint8Array,
+  gridSize: number,
   surfaceTension: number,
   forces: Float32Array
 ): void {
-  const n = heights.length;
-  if (n < 2) return;
-  for (let i = 0; i < n; i++) {
-    const left = heights[(i - 1 + n) % n]!;
-    const right = heights[(i + 1) % n]!;
-    forces[i]! += surfaceTension * (left + right - 2 * heights[i]!);
+  const N = gridSize;
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      const idx = j * N + i;
+      if (!mask[idx]) continue;
+      const h = heights[idx]!;
+      const hl = (i > 0     && mask[idx - 1]) ? heights[idx - 1]! : h;
+      const hr = (i < N - 1 && mask[idx + 1]) ? heights[idx + 1]! : h;
+      const ht = (j > 0     && mask[idx - N]) ? heights[idx - N]! : h;
+      const hb = (j < N - 1 && mask[idx + N]) ? heights[idx + N]! : h;
+      forces[idx]! += surfaceTension * (hl + hr + ht + hb - 4 * h);
+    }
   }
 }
 
 /**
- * Restoring force toward restHeight — acts like gravity pulling spikes back down.
+ * Restoring force toward restHeight for all cells inside mask.
  */
 export function applyGravity(
   heights: Float32Array,
+  mask: Uint8Array,
   restHeight: number,
   gravity: number,
   forces: Float32Array
 ): void {
-  for (let i = 0; i < heights.length; i++) {
-    forces[i]! += -gravity * (heights[i]! - restHeight);
+  for (let idx = 0; idx < heights.length; idx++) {
+    if (!mask[idx]) continue;
+    forces[idx]! += -gravity * (heights[idx]! - restHeight);
   }
 }
 
 /**
- * Exponential velocity damping. Applied after integration.
+ * Exponential velocity damping. Clamped so factor never goes negative.
  */
 export function applyDamping(
   velocities: Float32Array,
+  mask: Uint8Array,
   viscosity: number,
   dt: number
 ): void {
   const factor = Math.max(0, 1 - viscosity * dt);
-  for (let i = 0; i < velocities.length; i++) {
-    velocities[i]! *= factor;
+  for (let idx = 0; idx < velocities.length; idx++) {
+    if (!mask[idx]) continue;
+    velocities[idx]! *= factor;
   }
 }

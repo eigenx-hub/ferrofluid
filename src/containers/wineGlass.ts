@@ -1,54 +1,30 @@
-import { ContainerDef, FluidRegion, evenSpacing } from './types';
+import { ContainerDef, FluidRegion, circleMask } from './types';
 
 export const wineGlass: ContainerDef = {
   id: 'wineGlass',
   label: 'Wine Glass',
 
-  getSampleXPositions: (count) => evenSpacing(count),
+  getMask: (N) => circleMask(N, 0.46),
 
   getFluidRegion(cW, cH): FluidRegion {
-    const w = Math.min(cW * 0.4, 220);
-    const h = cH * 0.42;
-    const x = (cW - w) / 2;
-    const y = cH * 0.12;
-    return { x, y, w, h };
+    const size = Math.min(cW * 0.55, cH * 0.65, 400);
+    return { x: (cW - size) / 2, y: (cH - size) / 2, w: size, h: size };
   },
 
   drawOutline(ctx, cW, cH) {
     const r = this.getFluidRegion(cW, cH);
-    const cx = r.x + r.w / 2;
-    const stemH = cH * 0.24;
-    const stemY = r.y + r.h;
-    const baseW = r.w * 0.65;
-    const stemW = 6;
-
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2, rad = r.w / 2;
     ctx.save();
-    // Bowl: curved sides
     ctx.beginPath();
-    ctx.moveTo(r.x, r.y);
-    ctx.bezierCurveTo(r.x - 10, r.y + r.h * 0.5, r.x, r.y + r.h, cx - stemW / 2, stemY);
-    // Stem
-    ctx.lineTo(cx - stemW / 2, stemY + stemH);
-    // Base
-    ctx.lineTo(cx - baseW / 2, stemY + stemH);
-    ctx.lineTo(cx - baseW / 2, stemY + stemH + 8);
-    ctx.lineTo(cx + baseW / 2, stemY + stemH + 8);
-    ctx.lineTo(cx + baseW / 2, stemY + stemH);
-    ctx.lineTo(cx + stemW / 2, stemY + stemH);
-    // Other side up
-    ctx.lineTo(cx + stemW / 2, stemY);
-    ctx.bezierCurveTo(r.x + r.w, r.y + r.h, r.x + r.w + 10, r.y + r.h * 0.5, r.x + r.w, r.y);
-
+    ctx.arc(cx, cy, rad + 4, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(160,210,255,0.55)';
     ctx.lineWidth = 2;
     ctx.stroke();
-
-    // Bowl sheen
+    // Curved inner sheen (top-down bowl highlight)
     ctx.beginPath();
-    ctx.moveTo(r.x + 8, r.y + 10);
-    ctx.bezierCurveTo(r.x + 4, r.y + r.h * 0.4, r.x + 6, r.y + r.h * 0.7, cx - 8, stemY - 4);
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-    ctx.lineWidth = 3;
+    ctx.arc(cx - rad * 0.25, cy - rad * 0.25, rad * 0.55, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+    ctx.lineWidth = 1;
     ctx.stroke();
     ctx.restore();
   },

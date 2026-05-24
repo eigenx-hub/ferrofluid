@@ -2,7 +2,8 @@ import { PhysicsState, PhysicsConfig } from './types';
 import { applyMagnetic, applySurfaceTension, applyGravity, applyDamping } from './forces';
 
 /**
- * Advances physics by dt seconds. Returns a new PhysicsState (immutable).
+ * Advances physics by dt seconds using sub-stepping for numerical stability.
+ * Returns a new PhysicsState (immutable).
  */
 export function stepPhysics(
   state: PhysicsState,
@@ -11,42 +12,56 @@ export function stepPhysics(
 ): PhysicsState {
   if (dt <= 0) return state;
 
-  const { spikeCount, surfaceTension, gravity, fillLevel } = config;
-  const forces = new Float32Array(spikeCount);
+  const { subSteps, surfaceTension, gravity, fillLevel } = config;
+  const subDt = dt / subSteps;
 
-  applyMagnetic(state, config, forces);
-  applySurfaceTension(state.heights, surfaceTension, forces);
-  applyGravity(state.heights, fillLevel, gravity, forces);
+  let heights = new Float32Array(state.heights);
+  let velocities = new Float32Array(state.velocities);
+  const { mask, gridSize } = state;
 
-  const newHeights = new Float32Array(state.heights);
-  const newVelocities = new Float32Array(state.velocities);
+  for (let step = 0; step < subSteps; step++) {
+    const forces = new Float32Array(gridSize * gridSize);
 
-  for (let i = 0; i < spikeCount; i++) {
-    newVelocities[i]! += forces[i]! * dt;
-    newHeights[i]! += newVelocities[i]! * dt;
-    newHeights[i]! = Math.max(0, Math.min(1, newHeights[i]!));
+    applyMagnetic({ ...state, heights, velocities }, config, forces);
+    applySurfaceTension(heights, mask, gridSize, surfaceTension, forces);
+    applyGravity(heights, mask, fillLevel, gravity, forces);
+
+    for (let idx = 0; idx < gridSize * gridSize; idx++) {
+      if (!mask[idx]) continue;
+      velocities[idx]! += forces[idx]! * subDt;
+      heights[idx]! += velocities[idx]! * subDt;
+      heights[idx]! = Math.max(0, Math.min(1, heights[idx]!));
+    }
+
+    applyDamping(velocities, mask, config.viscosity, subDt);
   }
-
-  applyDamping(newVelocities, config.viscosity, dt);
 
   return {
     ...state,
-    heights: newHeights,
-    velocities: newVelocities,
+    heights,
+    velocities,
     restHeight: fillLevel,
   };
 }
 
 export function createInitialState(
-  spikeCount: number,
+  gridSize: number,
   fillLevel: number,
+  mask: Uint8Array,
   mode: 'attract' | 'repel' = 'attract'
 ): PhysicsState {
+  const n = gridSize * gridSize;
+  const heights = new Float32Array(n);
+  for (let idx = 0; idx < n; idx++) {
+    heights[idx] = mask[idx] ? fillLevel : 0;
+  }
   return {
-    heights: new Float32Array(spikeCount).fill(fillLevel),
-    velocities: new Float32Array(spikeCount).fill(0),
+    heights,
+    velocities: new Float32Array(n),
     restHeight: fillLevel,
     cursor: null,
     mode,
+    mask,
+    gridSize,
   };
 }
