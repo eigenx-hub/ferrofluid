@@ -3,10 +3,11 @@ import { createInitialState, stepPhysics } from './physics/step';
 import { PhysicsState } from './physics/types';
 import { Renderer } from './rendering/Renderer';
 import { ColorConfig, DEFAULT_COLOR_CONFIG } from './rendering/colors';
-import { ContainerDef, CONTAINERS } from './containers';
+import { openPool } from './containers';
 import { buildControls } from './ui/Controls';
 
 const MAX_DT = 1 / 30;
+const container = openPool;
 
 export function startApp(canvas: HTMLCanvasElement, sidebar: HTMLElement): void {
   const ctx = canvas.getContext('2d');
@@ -15,19 +16,18 @@ export function startApp(canvas: HTMLCanvasElement, sidebar: HTMLElement): void 
 
   let physicsConfig: PhysicsConfig = { ...DEFAULT_CONFIG };
   let colorConfig: ColorConfig = { ...DEFAULT_COLOR_CONFIG };
-  let container: ContainerDef = CONTAINERS[0]!;
   let mode: 'attract' | 'repel' = 'attract';
 
-  function buildMask() {
-    return container.getMask(physicsConfig.gridSize);
+  function freshState(): PhysicsState {
+    return createInitialState(
+      physicsConfig.gridSize,
+      physicsConfig.fillLevel,
+      container.getMask(physicsConfig.gridSize),
+      mode
+    );
   }
 
-  let state: PhysicsState = createInitialState(
-    physicsConfig.gridSize,
-    physicsConfig.fillLevel,
-    buildMask(),
-    mode
-  );
+  let state: PhysicsState = freshState();
 
   function resize(): void {
     const wrap = canvas.parentElement!;
@@ -36,29 +36,21 @@ export function startApp(canvas: HTMLCanvasElement, sidebar: HTMLElement): void 
   resize();
   window.addEventListener('resize', resize);
 
-  buildControls(sidebar, { physicsConfig, colorConfig, container, mode }, (next) => {
+  buildControls(sidebar, { physicsConfig, colorConfig, mode }, (next) => {
     const needsReset =
       next.physicsConfig.gridSize !== physicsConfig.gridSize ||
-      next.container.id !== container.id ||
       next.physicsConfig.fillLevel !== physicsConfig.fillLevel;
 
     physicsConfig = next.physicsConfig;
     colorConfig = next.colorConfig;
-    container = next.container;
     mode = next.mode;
 
-    if (needsReset) {
-      state = createInitialState(physicsConfig.gridSize, physicsConfig.fillLevel, buildMask(), mode);
-    } else {
-      state = { ...state, mode, restHeight: physicsConfig.fillLevel };
-    }
+    state = needsReset ? freshState() : { ...state, mode, restHeight: physicsConfig.fillLevel };
   });
 
   function updateCursor(clientX: number, clientY: number): void {
     const rect = canvas.getBoundingClientRect();
-    const mx = clientX - rect.left;
-    const my = clientY - rect.top;
-    state = { ...state, cursor: renderer.toPhysicsCoords(mx, my, container) };
+    state = { ...state, cursor: renderer.toPhysicsCoords(clientX - rect.left, clientY - rect.top, container) };
   }
 
   canvas.addEventListener('mousemove', (e) => updateCursor(e.clientX, e.clientY));

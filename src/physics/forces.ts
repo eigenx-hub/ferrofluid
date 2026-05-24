@@ -1,11 +1,12 @@
 import { PhysicsState, PhysicsConfig } from './types';
 
-const MIN_DIST = 0.008;
-
 /**
- * Applies magnetic force from cursor into `forces` (in-place accumulation).
- * Force is purely vertical (upward for attract, downward for repel).
- * Magnitude falls off as 1/dist^2 from cursor position in XY plane.
+ * Vertical component of the field from a magnetic monopole at depth D below
+ * the fluid surface. F(r) = D / (r² + D²)^(3/2).
+ *
+ * Unlike the 2D 1/r² model this is always finite (no singularity), has a
+ * smooth dome shape, and spreads force over a radius ≈ D — which is what
+ * drives the ring of Rosensweig spikes seen in real ferrofluid photos.
  */
 export function applyMagnetic(
   state: PhysicsState,
@@ -14,27 +15,27 @@ export function applyMagnetic(
 ): void {
   if (!state.cursor) return;
   const { mask, cursor, mode, gridSize } = state;
-  const { fieldStrength } = config;
+  const { fieldStrength, magnetDepth } = config;
   const sign = mode === 'attract' ? 1 : -1;
   const N = gridSize;
+  const D2 = magnetDepth * magnetDepth;
 
   for (let j = 0; j < N; j++) {
     for (let i = 0; i < N; i++) {
       const idx = j * N + i;
       if (!mask[idx]) continue;
-      const xi = i / (N - 1);
-      const yj = j / (N - 1);
-      const dx = xi - cursor.x;
-      const dy = yj - cursor.y;
-      const dist = Math.max(Math.sqrt(dx * dx + dy * dy), MIN_DIST);
-      forces[idx]! += sign * fieldStrength / (dist * dist);
+      const dx = i / (N - 1) - cursor.x;
+      const dy = j / (N - 1) - cursor.y;
+      const r2 = dx * dx + dy * dy;
+      // Vertical monopole field: depth / (r² + depth²)^(3/2)
+      const denom = Math.pow(r2 + D2, 1.5);
+      forces[idx]! += sign * fieldStrength * magnetDepth / denom;
     }
   }
 }
 
 /**
- * 2D Laplacian (4-neighbor stencil) with Neumann boundary conditions at mask edges.
- * Neighbors outside the mask are treated as having the same height as the current cell.
+ * 2D Laplacian (4-neighbor) with Neumann BC at mask edges.
  */
 export function applySurfaceTension(
   heights: Float32Array,
@@ -59,7 +60,7 @@ export function applySurfaceTension(
 }
 
 /**
- * Restoring force toward restHeight for all cells inside mask.
+ * Restoring force toward restHeight.
  */
 export function applyGravity(
   heights: Float32Array,
@@ -75,7 +76,7 @@ export function applyGravity(
 }
 
 /**
- * Exponential velocity damping. Clamped so factor never goes negative.
+ * Exponential velocity damping, clamped so factor never goes negative.
  */
 export function applyDamping(
   velocities: Float32Array,

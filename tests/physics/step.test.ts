@@ -10,10 +10,10 @@ function cfg(overrides: Partial<PhysicsConfig> = {}): PhysicsConfig {
 }
 
 describe('createInitialState', () => {
-  it('initializes heights inside mask to fillLevel', () => {
+  it('initializes heights inside mask close to fillLevel (within noise range)', () => {
     const state = createInitialState(N, 0.4, fullMask);
     for (let i = 0; i < N * N; i++) {
-      expect(Math.abs(state.heights[i]! - 0.4)).toBeLessThan(1e-6);
+      expect(Math.abs(state.heights[i]! - 0.4)).toBeLessThan(0.01);
     }
   });
 

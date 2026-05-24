@@ -53,7 +53,10 @@ export function createInitialState(
   const n = gridSize * gridSize;
   const heights = new Float32Array(n);
   for (let idx = 0; idx < n; idx++) {
-    heights[idx] = mask[idx] ? fillLevel : 0;
+    if (mask[idx]) {
+      // Tiny random noise seeds the Rosensweig instability
+      heights[idx] = fillLevel + (Math.random() - 0.5) * 0.008;
+    }
   }
   return {
     heights,
