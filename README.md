@@ -32,6 +32,7 @@ The simulation renders the fluid inside a bounded container. Planned vessel shap
 | **Mason jar** | Chunky, familiar shape; slightly irregular silhouette |
 | **Wine glass** | Curved bowl + stem; fluid dynamics at the curved wall |
 | **Hourglass** | Fluid flows through the pinch point under gravity |
+| **Klein bottle** | Non-orientable surface — fluid wraps through itself; rendered as a 3D projected cross-section with the fluid pooling in the visible basin |
 | **Open pool** | No walls — unbounded 2D top-down view, full spike field visible |
 
 Container selection via a dropdown or icon-grid in the UI.
