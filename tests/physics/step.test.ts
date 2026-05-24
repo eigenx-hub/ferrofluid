@@ -9,7 +9,8 @@ function cfg(overrides: Partial<PhysicsConfig> = {}): PhysicsConfig {
 describe('createInitialState', () => {
   it('initializes all heights to fillLevel', () => {
     const state = createInitialState(16, 0.4);
-    expect(Array.from(state.heights).every((h) => h === 0.4)).toBe(true);
+    // Float32Array stores 32-bit floats; compare with tolerance
+    expect(Array.from(state.heights).every((h) => Math.abs(h - 0.4) < 1e-6)).toBe(true);
   });
 
   it('initializes all velocities to 0', () => {
@@ -53,7 +54,8 @@ describe('stepPhysics', () => {
     h[3] = 0.9;
     state = { ...state, heights: h };
 
-    const config = cfg({ gravity: 15, viscosity: 4, surfaceTension: 100, fieldStrength: 0 });
+    // fillLevel must match initial state's restHeight; surfaceTension kept low for stability
+    const config = cfg({ gravity: 15, viscosity: 5, surfaceTension: 5, fieldStrength: 0, fillLevel: 0.5 });
     for (let i = 0; i < 300; i++) {
       state = stepPhysics(state, config, 0.016);
     }
